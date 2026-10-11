@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import gspread
 from telegram import Update
@@ -7,14 +8,19 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 # --- 1. إعداد مفتاح تليجرام ---
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# --- 2. الاتصال بملفات Google Sheets باستخدام المسار المطلق ---
+# --- 2. الاتصال بملفات Google Sheets عبر متغيرات البيئة السحابية ---
 SHEETS = {}
 try:
-    # تحديد مسار ملف الأمان بدقة بغض النظر عن مسار تشغيل السحابة
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    creds_path = os.path.join(base_dir, "credentials.json")
+    creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
     
-    gc = gspread.service_account(filename=creds_path)
+    if creds_json_str:
+        creds_dict = json.loads(creds_json_str)
+        gc = gspread.service_account_from_dict(creds_dict)
+    else:
+        # احتياطي للتشغيل المحلي إن وجد الملف
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        creds_path = os.path.join(base_dir, "credentials.json")
+        gc = gspread.service_account(filename=creds_path)
     
     sheet_mapping = {
         "salaries": "Salaries",
@@ -121,5 +127,5 @@ if __name__ == '__main__':
     
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
     
-    print("🚀 FlowFi Cloud Bot (Path-Fixed Mode) is up and running!")
+    print("🚀 FlowFi Cloud Bot (Env-Creds Mode) is up and running!")
     app.run_polling()
