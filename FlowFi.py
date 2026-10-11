@@ -4,19 +4,18 @@ import gspread
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-# التوكن الجديد للبوت
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
 # --- الاتصال الآمن والمباشر بملف credentials.json ---
+gc = None
 try:
     base_dir = os.path.dirname(os.path.abspath(__file__))
     creds_path = os.path.join(base_dir, "credentials.json")
     gc = gspread.service_account(filename=creds_path)
-    print("✅ تم الاتصال بـ Google Sheets بنجاح!")
+    print("✅ تم تحميل بيانات الاعتماد بنجاح!")
 except Exception as e:
     print(f"❌ خطأ في تحميل ملف الاعتماد: {e}")
 
-# أسماء الجداول المطلوبة
 SHEET_MAPPING = {
     "sales": "Sales",
     "expenses": "Expenses",
@@ -28,20 +27,23 @@ SHEET_MAPPING = {
 }
 
 def get_target_sheet(tab_name):
-    """دالة ذكية لفتح أو إنشاء الشيت تلقائياً إذا لم يكن موجوداً"""
+    if not gc:
+        return None, "لم يتم تهيئة الاتصال بـ gspread"
+    
     sheet_title = SHEET_MAPPING.get(tab_name, "Expenses")
     try:
-        # محاولة فتح الشيت الموجود مسبقاً
+        # محاولة فتح الشيت الموجود
         sh = gc.open(sheet_title)
-        return sh.sheet1
-    except Exception:
+        return sh.sheet1, None
+    except gspread.exceptions.SpreadsheetNotFound:
         try:
-            # إذا لم يكن موجوداً، يتم إنشاؤه تلقائياً
+            # إذا لم يكن موجوداً، قم بإنشائه تلقائياً
             sh = gc.create(sheet_title)
-            return sh.sheet1
-        except Exception as e:
-            print(f"❌ خطأ في فتح أو إنشاء شيت {sheet_title}: {e}")
-            return None
+            return sh.sheet1, None
+        except Exception as create_err:
+            return None, str(create_err)
+    except Exception as e:
+        return None, str(e)
 
 def parse_message_locally(text: str):
     text_lower = text.lower()
@@ -93,17 +95,17 @@ async def save_to_sheet(data, update: Update):
     tab_name = data.get("tab", "").lower()
     row_values = data.get("row", [])
 
-    # استدعاء الشيت المطلوبة ديناميكياً (فتح أو إنشاؤه مباشرة)
-    target_sheet = get_target_sheet(tab_name)
+    target_sheet, err_msg = get_target_sheet(tab_name)
 
     if target_sheet:
         try:
             target_sheet.append_row(row_values)
             await update.message.reply_text(f"✅ تم حفظ البيانات وتوزيعها بنجاح في قسم: `{tab_name.upper()}` 📊", parse_mode="Markdown")
         except Exception as e:
-            await update.message.reply_text(f"⚠️ خطأ أثناء الكتابة في الشيت: {e}")
+            await update.message.reply_text(f"⚠️ خطأ أثناء الكتابة: {e}")
     else:
-        await update.message.reply_text("⚠️ لم يتم ربط الحساب بجوجل شيتس، تأكد من صلاحيات البريد في ملف الـ credentials.")
+        # إرسال السبب التقني الحقيقي لنعرفه فوراً
+        await update.message.reply_text(f"⚠️ خطأ ربط الشيت: {err_msg}")
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
@@ -116,5 +118,5 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
-    print("🚀 FlowFi Ultimate Bot is up and running!")
+    print("🚀 FlowFi Bot is up and running!")
     app.run_polling()
