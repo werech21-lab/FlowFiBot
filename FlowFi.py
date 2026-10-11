@@ -1,68 +1,32 @@
 import os
 import re
-import gspread
+import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# --- الاتصال الآمن والمباشر بملف credentials.json ---
-gc = None
-try:
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    creds_path = os.path.join(base_dir, "credentials.json")
-    gc = gspread.service_account(filename=creds_path)
-    print("✅ تم تحميل بيانات الاعتماد بنجاح!")
-except Exception as e:
-    print(f"❌ خطأ في تحميل ملف الاعتماد: {e}")
-
-SHEET_MAPPING = {
-    "sales": "Sales",
-    "expenses": "Expenses",
-    "salaries": "Salaries",
-    "menu": "Menu",
-    "purchases": "Purchases",
-    "deliveries": "Deliveries",
-    "crm": "CRM"
-}
-
-def get_target_sheet(tab_name):
-    if not gc:
-        return None, "لم يتم تهيئة الاتصال بـ gspread"
-    
-    sheet_title = SHEET_MAPPING.get(tab_name, "Expenses")
-    try:
-        # محاولة فتح الشيت الموجود
-        sh = gc.open(sheet_title)
-        return sh.sheet1, None
-    except gspread.exceptions.SpreadsheetNotFound:
-        try:
-            # إذا لم يكن موجوداً، قم بإنشائه تلقائياً
-            sh = gc.create(sheet_title)
-            return sh.sheet1, None
-        except Exception as create_err:
-            return None, str(create_err)
-    except Exception as e:
-        return None, str(e)
+# ضع هنا رابط الـ Web App الذي نسخته من Google Apps Script
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyP32mu3lgg8nqy6J0tCchNdsiixalxGA-wCHnMr9cOaQdGmBWncx1mMNb6eXU9-YftDg/exec"
 
 def parse_message_locally(text: str):
     text_lower = text.lower()
-    tab = "expenses" 
+    tab = "Expenses" 
     
     if any(k in text_lower for k in ["بيع", "مبيعات", "طلب", "طلبات", "sales", "order", "زبون", "فاتورة بيع", "سعر الواحدة", "شاورما"]):
-        tab = "sales"
+        tab = "Sales"
     elif any(k in text_lower for k in ["راتب", "رواتب", "موظف", "salary", "salaries", "أجور", "اجور"]):
-        tab = "salaries"
+        tab = "Salaries"
     elif any(k in text_lower for k in ["منيو", "قائمة", "صنف", "صنف جديد", "menu", "item", "وجبة", "مشروب", "بطاطة", "شيبس"]):
-        tab = "menu"
+        tab = "Menu"
     elif any(k in text_lower for k in ["مشتريات", "شراء", "مورد", "purchases", "stock", "بضاعة", "مواد خام"]):
-        tab = "purchases"
+        tab = "Purchases"
     elif any(k in text_lower for k in ["توصيل", "دليفري", "سائق", "delivery", "driver", "شحن"]):
-        tab = "deliveries"
+        tab = "Deliveries"
     elif any(k in text_lower for k in ["عميل", "شكوى", "ملاحظة", "crm", "client", "feedback", "اتصال", "تواصل"]):
-        tab = "crm"
+        tab = "CRM"
     elif any(k in text_lower for k in ["مصروف", "إيجار", "فاتورة", "expenses", "bill", "rent", "كهرباء", "ماء"]):
-        tab = "expenses"
+        tab = "Expenses"
 
     numbers = re.findall(r'\d+(?:\.\d+)?', text)
     amount = numbers[0] if numbers else ""
@@ -84,7 +48,7 @@ def parse_message_locally(text: str):
 
     return {
         "tab": tab,
-        "row": [name_or_detail, amount, currency, text]
+        "row": [name_or_detail, f"{amount} {currency}".strip(), text]
     }
 
 async def save_to_sheet(data, update: Update):
@@ -92,20 +56,17 @@ async def save_to_sheet(data, update: Update):
         await update.message.reply_text("⚠️ لم أتمكن من فهم أو تصنيف البيانات.")
         return
 
-    tab_name = data.get("tab", "").lower()
-    row_values = data.get("row", [])
-
-    target_sheet, err_msg = get_target_sheet(tab_name)
-
-    if target_sheet:
-        try:
-            target_sheet.append_row(row_values)
-            await update.message.reply_text(f"✅ تم حفظ البيانات وتوزيعها بنجاح في قسم: `{tab_name.upper()}` 📊", parse_mode="Markdown")
-        except Exception as e:
-            await update.message.reply_text(f"⚠️ خطأ أثناء الكتابة: {e}")
-    else:
-        # إرسال السبب التقني الحقيقي لنعرفه فوراً
-        await update.message.reply_text(f"⚠️ خطأ ربط الشيت: {err_msg}")
+    try:
+        response = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=15)
+        res_json = response.json()
+        
+        if res_json.get("status") == "success":
+            tab_name = data.get("tab")
+            await update.message.reply_text(f"✅ تم حفظ البيانات بنجاح في قسم: `{tab_name}` 📊", parse_mode="Markdown")
+        else:
+            await update.message.reply_text(f"⚠️ خطأ من جوجل: {res_json.get('message', 'غير معروف')}")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ خطأ في الاتصال بجوجل شيت: {e}")
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
@@ -118,5 +79,5 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
-    print("🚀 FlowFi Bot is up and running!")
+    print("🚀 FlowFi WebApp Bot is up and running!")
     app.run_polling()
