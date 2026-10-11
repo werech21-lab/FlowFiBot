@@ -6,8 +6,8 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# ضع هنا رابط الـ Web App الذي نسخته من Google Apps Script
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyP32mu3lgg8nqy6J0tCchNdsiixalxGA-wCHnMr9cOaQdGmBWncx1mMNb6eXU9-YftDg/exec"
+# رابط الـ Web App الخاص بك بعد التحديث الأخير
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz7fhJ2DBtNGBWlkq1ZXBQZufvPF-i-mDVgskx-_5-nckM7R6yeCAuZm6a_R3T4VAlqbA/exec"
 
 def parse_message_locally(text: str):
     text_lower = text.lower()
