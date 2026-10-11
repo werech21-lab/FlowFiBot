@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import gspread
 from telegram import Update
@@ -10,7 +11,13 @@ TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 # --- 2. الاتصال بملفات Google Sheets ---
 SHEETS = {}
 try:
-    gc = gspread.service_account(filename="credentials.json")
+    # قراءة بيانات الاعتماد من المتغير البيئي على Railway أو من الملف محلياً
+    creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if creds_json_str:
+        creds_dict = json.loads(creds_json_str)
+        gc = gspread.service_account_from_dict(creds_dict)
+    else:
+        gc = gspread.service_account(filename="credentials.json")
     
     sheet_mapping = {
         "salaries": "Salaries",
@@ -118,5 +125,5 @@ if __name__ == '__main__':
     
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
     
-    print("🚀 FlowFi Cloud Bot (Stable Mode) is up and running!")
+    print("🚀 FlowFi Cloud Bot (Secure & Stable Mode) is up and running!")
     app.run_polling()
