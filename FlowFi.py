@@ -5,10 +5,8 @@ import gspread
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-# --- 1. إعداد مفتاح تليجرام ---
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# --- 2. الاتصال بملفات Google Sheets عبر متغيرات البيئة السحابية ---
 SHEETS = {}
 try:
     creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
@@ -17,7 +15,6 @@ try:
         creds_dict = json.loads(creds_json_str)
         gc = gspread.service_account_from_dict(creds_dict)
     else:
-        # احتياطي للتشغيل المحلي إن وجد الملف
         base_dir = os.path.dirname(os.path.abspath(__file__))
         creds_path = os.path.join(base_dir, "credentials.json")
         gc = gspread.service_account(filename=creds_path)
@@ -35,21 +32,21 @@ try:
     for key, name in sheet_mapping.items():
         try:
             SHEETS[key] = gc.open(name).sheet1
-        except Exception:
+        except Exception as sheet_err:
+            print(f"⚠️ تنبيه: لم يتم فتح شيت '{name}': {sheet_err}")
             try:
                 new_sheet = gc.create(name)
                 SHEETS[key] = new_sheet.sheet1
-            except Exception:
-                pass
+                print(تم إنشاء شيت جديد: {name})
+            except Exception as create_err:
+                print(f"❌ فشل إنشاء شيت '{name}': {create_err}")
                 
     print("✅ تم الاتصال بجميع ملفات Google Sheets بنجاح!")
 except Exception as e:
-    print(f"❌ خطأ في الاتصال بجوجل شيتس: {e}")
+    print(f"❌ خطأ فادح في الاتصال بجوجل شيتس: {e}")
 
-# --- 3. تحليل وتوزيع البيانات محلياً على الأعمدة ---
 def parse_message_locally(text: str):
     text_lower = text.lower()
-    
     tab = "expenses" 
     
     if any(k in text_lower for k in ["بيع", "مبيعات", "طلب", "طلبات", "sales", "order", "زبون", "فاتورة بيع", "سعر الواحدة", "شاورما"]):
@@ -90,7 +87,6 @@ def parse_message_locally(text: str):
         "row": [name_or_detail, amount, currency, text]
     }
 
-# --- 4. حفظ البيانات في الشيت المناسب ---
 async def save_to_sheet(data, update: Update):
     if not data or "tab" not in data:
         await update.message.reply_text("⚠️ لم أتمكن من فهم أو تصنيف البيانات.")
@@ -100,19 +96,17 @@ async def save_to_sheet(data, update: Update):
     row_values = data.get("row", [])
 
     target_sheet = SHEETS.get(tab_name)
-    if not target_sheet:
-        target_sheet = SHEETS.get("expenses")
-
+    
     if target_sheet:
         try:
             target_sheet.append_row(row_values)
             await update.message.reply_text(f"✅ تم حفظ البيانات وتوزيعها بنجاح في قسم: `{tab_name.upper()}` 📊", parse_mode="Markdown")
         except Exception as e:
-            await update.message.reply_text(f"⚠️ حدث خطأ أثناء الكتابة في الشيت: {e}")
+            # إرسال سبب الخطأ الحقيقي مباشرة في تليجرام لنراه بوضوح
+            await update.message.reply_text(f"⚠️ خطأ أثناء الكتابة: {str(e)}")
     else:
-        await update.message.reply_text("⚠️ عذراً، لم أتمكن من الوصول إلى ملفات Google Sheets.")
+        await update.message.reply_text(f"⚠️ الشيت غير موجود في الذاكرة (القائم: {list(SHEETS.keys())})")
 
-# --- 5. معالجة الرسائل النصية ---
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     if not user_text:
@@ -121,11 +115,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = parse_message_locally(user_text)
     await save_to_sheet(data, update)
 
-# --- 6. تشغيل البوت ---
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
-    
-    print("🚀 FlowFi Cloud Bot (Env-Creds Mode) is up and running!")
+    print("🚀 FlowFi Cloud Bot (Debug Mode) is up and running!")
     app.run_polling()
