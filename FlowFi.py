@@ -7,11 +7,14 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 # --- 1. إعداد مفتاح تليجرام ---
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# --- 2. الاتصال بملفات Google Sheets ---
+# --- 2. الاتصال بملفات Google Sheets باستخدام المسار المطلق ---
 SHEETS = {}
 try:
-    # الاتصال المباشر بملف credentials.json الموجود في المشروع
-    gc = gspread.service_account(filename="credentials.json")
+    # تحديد مسار ملف الأمان بدقة بغض النظر عن مسار تشغيل السحابة
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    creds_path = os.path.join(base_dir, "credentials.json")
+    
+    gc = gspread.service_account(filename=creds_path)
     
     sheet_mapping = {
         "salaries": "Salaries",
@@ -118,5 +121,5 @@ if __name__ == '__main__':
     
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
     
-    print("🚀 FlowFi Cloud Bot (Direct File Mode) is up and running!")
+    print("🚀 FlowFi Cloud Bot (Path-Fixed Mode) is up and running!")
     app.run_polling()
