@@ -1,5 +1,4 @@
 import os
-import json
 import re
 import gspread
 from telegram import Update
@@ -7,25 +6,14 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
+# الاتصال المباشر والآمن باستخدام ملف credentials.json الموجود في المشروع
 SHEETS = {}
 try:
-    # جلب المتغير البيئي بالطريقة المباشرة
-    creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    creds_path = os.path.join(base_dir, "credentials.json")
     
-    if not creds_json_str:
-        # محاولة البحث عن أي متغير بديل أو الملف المحلي
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        creds_path = os.path.join(base_dir, "credentials.json")
-        if os.path.exists(creds_path):
-            with open(creds_path, "r") as f:
-                creds_json_str = f.read()
-
-    if creds_json_str:
-        creds_dict = json.loads(creds_json_str)
-        gc = gspread.service_account_from_dict(creds_dict)
-    else:
-        raise Exception("لم يتم العثور على بيانات الاعتماد في المتغيرات البيئية أو الملف المحلي!")
-
+    gc = gspread.service_account(filename=creds_path)
+    
     sheet_mapping = {
         "salaries": "Salaries",
         "sales": "Sales",
@@ -111,7 +99,7 @@ async def save_to_sheet(data, update: Update):
         except Exception as e:
             await update.message.reply_text(f"⚠️ خطأ أثناء الحفظ: {e}")
     else:
-        await update.message.reply_text("⚠️ لم يتم ربط الحساب بجوجل شيتس، تأكد من إعداد المفاتيح.")
+        await update.message.reply_text("⚠️ لم يتم ربط الحساب بجوجل شيتس، تأكد من ملف الاعتماد.")
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
