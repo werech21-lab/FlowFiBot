@@ -7,21 +7,24 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# --- اتصال ذكي وآمن جداً ---
 SHEETS = {}
 try:
+    # جلب المتغير البيئي بالطريقة المباشرة
     creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    
+    if not creds_json_str:
+        # محاولة البحث عن أي متغير بديل أو الملف المحلي
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        creds_path = os.path.join(base_dir, "credentials.json")
+        if os.path.exists(creds_path):
+            with open(creds_path, "r") as f:
+                creds_json_str = f.read()
+
     if creds_json_str:
         creds_dict = json.loads(creds_json_str)
         gc = gspread.service_account_from_dict(creds_dict)
     else:
-        # قراءة الملف محلياً إن وجد
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        creds_path = os.path.join(base_dir, "credentials.json")
-        if os.path.exists(creds_path):
-            gc = gspread.service_account(filename=creds_path)
-        else:
-            raise Exception("ملف credentials.json غير موجود وغير مُعرّف في المتغيرات البيئية!")
+        raise Exception("لم يتم العثور على بيانات الاعتماد في المتغيرات البيئية أو الملف المحلي!")
 
     sheet_mapping = {
         "salaries": "Salaries",
@@ -40,12 +43,12 @@ try:
             try:
                 new_sheet = gc.create(name)
                 SHEETS[key] = new_sheet.sheet1
-            except Exception as e:
-                print(f"فشل إنشاء شيت {name}: {e}")
+            except Exception:
+                pass
                 
-    print("✅ تم الاتصال بنجاح!")
+    print("✅ تم الاتصال بجميع ملفات Google Sheets بنجاح!")
 except Exception as e:
-    print(f"❌ خطأ الاتصال: {e}")
+    print(f"❌ خطأ في الاتصال: {e}")
 
 def parse_message_locally(text: str):
     text_lower = text.lower()
@@ -97,14 +100,9 @@ async def save_to_sheet(data, update: Update):
     tab_name = data.get("tab", "").lower()
     row_values = data.get("row", [])
 
-    # إذا حدث وأن الذاكرة لم تحمل الشيتات، نجرب فتحه مباشرة كحل احتياطي فوري
     target_sheet = SHEETS.get(tab_name)
     if not target_sheet:
-        try:
-            target_sheet = gc.open(sheet_mapping[tab_name]).sheet1
-            SHEETS[tab_name] = target_sheet
-        except:
-            target_sheet = SHEETS.get("expenses")
+        target_sheet = SHEETS.get("expenses")
 
     if target_sheet:
         try:
@@ -126,5 +124,5 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
-    print("🚀 FlowFi Ultimate Cloud Bot is up and running!")
+    print("🚀 FlowFi Cloud Bot is up and running!")
     app.run_polling()
