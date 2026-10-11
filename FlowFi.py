@@ -80,7 +80,7 @@ def parse_message_locally(text: str):
         "row": [name_or_detail, amount, currency, text]
     }
 
-# --- 4. حفظ البيانات في الشيت المناسب ---
+# --- 4. حفظ البيانات في الشيت المناسب (بشكل آمن ومُحسّن) ---
 async def save_to_sheet(data, update: Update):
     if not data or "tab" not in data:
         await update.message.reply_text("⚠️ لم أتمكن من فهم أو تصنيف البيانات.")
@@ -89,19 +89,19 @@ async def save_to_sheet(data, update: Update):
     tab_name = data.get("tab", "").lower()
     row_values = data.get("row", [])
 
-    if tab_name in SHEETS:
+    # البحث عن الشيت المستهدف بطريقة آمنة تماماً
+    target_sheet = SHEETS.get(tab_name)
+    if not target_sheet:
+        target_sheet = SHEETS.get("expenses")
+
+    if target_sheet:
         try:
-            sheet = SHEETS[tab_name]
-            sheet.append_row(row_values)
+            target_sheet.append_row(row_values)
             await update.message.reply_text(f"✅ تم حفظ البيانات وتوزيعها بنجاح في قسم: `{tab_name.upper()}` 📊", parse_mode="Markdown")
         except Exception as e:
             await update.message.reply_text(f"⚠️ حدث خطأ أثناء الكتابة في الشيت: {e}")
     else:
-        try:
-            SHEETS["expenses"].append_row(row_values)
-            await update.message.reply_text(f"✅ تم حفظ البيانات في قسم EXPENSES (افتراضي).")
-        except Exception as e:
-            await update.message.reply_text(f"⚠️ عذراً، تعذر حفظ البيانات: {e}")
+        await update.message.reply_text("⚠️ عذراً، لم أتمكن من الوصول إلى ملفات Google Sheets.")
 
 # --- 5. معالجة الرسائل النصية ---
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -118,5 +118,5 @@ if __name__ == '__main__':
     
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
     
-    print("🚀 FlowFi Local Bot (Clean & Fast Mode) is up and running!")
+    print("🚀 FlowFi Cloud Bot (Stable Mode) is up and running!")
     app.run_polling()
