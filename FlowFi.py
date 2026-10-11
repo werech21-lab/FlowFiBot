@@ -1,5 +1,4 @@
 import os
-import json
 import re
 import gspread
 from telegram import Update
@@ -11,13 +10,8 @@ TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 # --- 2. الاتصال بملفات Google Sheets ---
 SHEETS = {}
 try:
-    # قراءة بيانات الاعتماد من المتغير البيئي على Railway أو من الملف محلياً
-    creds_json_str = os.getenv("GOOGLE_CREDENTIALS_JSON")
-    if creds_json_str:
-        creds_dict = json.loads(creds_json_str)
-        gc = gspread.service_account_from_dict(creds_dict)
-    else:
-        gc = gspread.service_account(filename="credentials.json")
+    # الاتصال المباشر بملف credentials.json الموجود في المشروع
+    gc = gspread.service_account(filename="credentials.json")
     
     sheet_mapping = {
         "salaries": "Salaries",
@@ -87,7 +81,7 @@ def parse_message_locally(text: str):
         "row": [name_or_detail, amount, currency, text]
     }
 
-# --- 4. حفظ البيانات في الشيت المناسب (بشكل آمن ومُحسّن) ---
+# --- 4. حفظ البيانات في الشيت المناسب ---
 async def save_to_sheet(data, update: Update):
     if not data or "tab" not in data:
         await update.message.reply_text("⚠️ لم أتمكن من فهم أو تصنيف البيانات.")
@@ -96,7 +90,6 @@ async def save_to_sheet(data, update: Update):
     tab_name = data.get("tab", "").lower()
     row_values = data.get("row", [])
 
-    # البحث عن الشيت المستهدف بطريقة آمنة تماماً
     target_sheet = SHEETS.get(tab_name)
     if not target_sheet:
         target_sheet = SHEETS.get("expenses")
@@ -125,5 +118,5 @@ if __name__ == '__main__':
     
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
     
-    print("🚀 FlowFi Cloud Bot (Secure & Stable Mode) is up and running!")
+    print("🚀 FlowFi Cloud Bot (Direct File Mode) is up and running!")
     app.run_polling()
