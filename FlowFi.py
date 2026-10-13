@@ -6,8 +6,9 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
-# رابط الـ Web App الجديد (Version 3)
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxt8hvUrxTkYbwHLiIsYF1ypbxru9QoR75IAQCZxc9Zv0SslMMMTPSoBEbufBe44eh9Vw/exec"
+# رابط الـ Web App الخاص بك
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbt8hVurTkYbwHLilsYF1ypbxru9Qor75lAQCZxc9Zv0SsIMMMTPSoBEbufBe4eH9Vw/exec"
+SECRET_KEY = "FlowFi_Secret_2026"
 
 def parse_message_locally(text: str):
     text_lower = text.lower()
@@ -47,6 +48,7 @@ def parse_message_locally(text: str):
     name_or_detail = clean_text.strip()
 
     return {
+        "secret_key": SECRET_KEY,
         "tab": tab,
         "row": [name_or_detail, f"{amount} {currency}".strip(), text]
     }
@@ -59,9 +61,8 @@ async def save_to_sheet(data, update: Update):
     try:
         response = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=20)
         
-        # التأكد من أن الاستجابة نصية سليمة وليست صفحة خطأ HTML
         if response.status_code != 200:
-            await update.message.reply_text(f"⚠️ خطأ خادم جوجل (Code {response.status_code})")
+            await update.message.reply_text(f"⚠️ خطأ في الخادم (Code {response.status_code})")
             return
             
         res_json = response.json()
@@ -70,9 +71,9 @@ async def save_to_sheet(data, update: Update):
             tab_name = data.get("tab")
             await update.message.reply_text(f"✅ تم حفظ البيانات بنجاح في قسم: `{tab_name}` 📊", parse_mode="Markdown")
         else:
-            await update.message.reply_text(f"⚠️ خطأ من جوجل: {res_json.get('message', 'غير معروف')}")
+            await update.message.reply_text("⚠️ مرفوض: لا تمتلك صلاحية الوصول لهذا البوت.")
     except Exception as e:
-        await update.message.reply_text(f"⚠️ خطأ في الاتصال بجوجل شيت: تأكد من صلاحيات الـ Web App.")
+        await update.message.reply_text("⚠️ خطأ في الاتصال بالخدمة.")
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
