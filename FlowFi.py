@@ -8,7 +8,7 @@ TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
 # رابط الـ Web App الخاص بك
 GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwISVjIN1RzHvDT3dcWb0pt9bqGxXu4FR1UQlh-_FpJi1BcD-GTzqp1oyyNIf-5KS8N4w/exec"
-SECRET_KEY = "FlowFi1_Secret_2026"
+SECRET_KEY = "FlowFi-1_Secret_2026"
 
 def parse_message_locally(text: str):
     text_lower = text.lower()
