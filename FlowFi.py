@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
 
 # رابط الـ Web App الخاص بك
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwISVjIN1RzHvDT3dcWb0pt9bqGxXu4FR1UQlh-_FpJi1BcD-GTzqp1oyyNIf-5KS8N4w/exec"
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBW6BRJDxw_XxxwghNa0WijRUzkPnQQIzoGeOZgY83NPamAWe6_L4RfEk6p7CWKGRZ/exec"
 SECRET_KEY = "FlowFi-1_Secret_2026"
 
 def parse_message_locally(text: str):
