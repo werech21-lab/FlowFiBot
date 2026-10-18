@@ -1,7 +1,10 @@
 python-telegram-bot
 google-genai
+openai
+anthropic
 pandas
 openpyxl
 gspread
 oauth2client
+matplotlib
 requests
