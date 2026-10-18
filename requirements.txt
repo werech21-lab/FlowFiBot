@@ -1,2 +1,7 @@
 python-telegram-bot
+google-genai
+pandas
+openpyxl
+gspread
+oauth2client
 requests
