@@ -1,90 +1,130 @@
-import os
 import re
-import requests
+import datetime
+import os
+import asyncio
+import pandas as pd
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
-TELEGRAM_BOT_TOKEN = "8927028342:AAFmrHFBWIcOfpn4ix6AMFP6mNiG1n3vZ60"
+from google import genai
+import openai
+import anthropic
 
-# رابط الـ Web App الخاص بك
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBW6BRJDxw_XxxwghNa0WijRUzkPnQQIzoGeOZgY83NPamAWe6_L4RfEk6p7CWKGRZ/exec"
-SECRET_KEY = "FlowFi_Secret_2026"
+# ==========================================
+# 1. إعداد المتغيرات البيئية والمفاتيح (Secure Environment Variables)
+# ==========================================
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-def parse_message_locally(text: str):
-    text_lower = text.lower()
-    tab = "Expenses" 
-    
-    if any(k in text_lower for k in ["بيع", "مبيعات", "طلب", "طلبات", "sales", "order", "زبون", "فاتورة بيع", "سعر الواحدة", "شاورما"]):
-        tab = "Sales"
-    elif any(k in text_lower for k in ["راتب", "رواتب", "موظف", "salary", "salaries", "أجور", "اجور"]):
-        tab = "Salaries"
-    elif any(k in text_lower for k in ["منيو", "قائمة", "صنف", "صنف جديد", "menu", "item", "وجبة", "مشروب", "بطاطة", "شيبس"]):
-        tab = "Menu"
-    elif any(k in text_lower for k in ["مشتريات", "شراء", "مورد", "purchases", "stock", "بضاعة", "مواد خام"]):
-        tab = "Purchases"
-    elif any(k in text_lower for k in ["توصيل", "دليفري", "سائق", "delivery", "driver", "شحن"]):
-        tab = "Deliveries"
-    elif any(k in text_lower for k in ["عميل", "شكوى", "ملاحظة", "crm", "client", "feedback", "اتصال", "تواصل"]):
-        tab = "CRM"
-    elif any(k in text_lower for k in ["مصروف", "إيجار", "فاتورة", "expenses", "bill", "rent", "كهرباء", "ماء"]):
-        tab = "Expenses"
-
-    numbers = re.findall(r'\d+(?:\.\d+)?', text)
-    amount = numbers[0] if numbers else ""
-    
-    currency = ""
-    for curr in ["دينار", "دولار", "ريال", "درهم", "usd", "kwd", "sar", "aed"]:
-        if curr in text_lower:
-            currency = curr
-            break
-
-    clean_text = text
-    words_to_remove = ["ضيف", "اضف", "أضف", "راتب", "مبلغ", "مصروف", "شراء", "مشتريات", "طلب", "طلبات", "صنف", "منيو", "توصيل", "عميل", "بيع", "مبيعات", "سعر", "الواحدة", "دينار", "دولار", "ريال", "درهم"]
-    for w in words_to_remove:
-        clean_text = clean_text.replace(w, "")
-    for num in numbers:
-        clean_text = clean_text.replace(num, "")
-    
-    name_or_detail = clean_text.strip()
-
-    return {
-        "secret_key": SECRET_KEY,
-        "tab": tab,
-        "row": [name_or_detail, f"{amount} {currency}".strip(), text]
-    }
-
-async def save_to_sheet(data, update: Update):
-    if not data or "tab" not in data:
-        await update.message.reply_text("⚠️ لم أتمكن من فهم أو تصنيف البيانات.")
-        return
-
+# تهيئة العملاء الذكيين بشكل آمن
+gemini_client = None
+if GEMINI_API_KEY:
     try:
-        response = requests.post(GOOGLE_SCRIPT_URL, json=data, timeout=20)
-        
-        if response.status_code != 200:
-            await update.message.reply_text(f"⚠️ خطأ في الخادم (Code {response.status_code})")
-            return
-            
-        res_json = response.json()
-        
-        if res_json.get("status") == "success":
-            tab_name = data.get("tab")
-            await update.message.reply_text(f"✅ تم حفظ البيانات بنجاح في قسم: `{tab_name}` 📊", parse_mode="Markdown")
-        else:
-            await update.message.reply_text("⚠️ مرفوض: لا تمتلك صلاحية الوصول لهذا البوت.")
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
-        await update.message.reply_text("⚠️ خطأ في الاتصال بالخدمة.")
+        print(f"⚠️ Gemini Client Init Error: {e}")
 
-async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text
-    if not user_text:
-        return
+openai_client = None
+if OPENAI_API_KEY:
+    try:
+        openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    except Exception as e:
+        print(f"⚠️ OpenAI Client Init Error: {e}")
+
+claude_client = None
+if CLAUDE_API_KEY:
+    try:
+        claude_client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+    except Exception as e:
+        print(f"⚠️ Claude Client Init Error: {e}")
+
+# مسارات التخزين
+DESKTOP_PATH = os.path.join(os.path.expanduser("~"), "Desktop") if os.path.exists(os.path.join(os.path.expanduser("~"), "Desktop")) else "."
+EXCEL_FILE_PATH = os.path.join(DESKTOP_PATH, "FlowFi_Database.xlsx")
+INVOICES_DIR = os.path.join(DESKTOP_PATH, "FlowFi_Invoices")
+BACKUPS_DIR = os.path.join(DESKTOP_PATH, "FlowFi_Backups")
+
+os.makedirs(INVOICES_DIR, exist_ok=True)
+os.makedirs(BACKUPS_DIR, exist_ok=True)
+
+# ==========================================
+# 2. وظائف إدارة القيود والنسخ الاحتياطي
+# ==========================================
+def backup_database():
+    """إنشاء نسخة احتياطية من قاعدة البيانات"""
+    if os.path.exists(EXCEL_FILE_PATH):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(BACKUPS_DIR, f"FlowFi_Database_Backup_{timestamp}.xlsx")
+        try:
+            df_dict = pd.read_excel(EXCEL_FILE_PATH, sheet_name=None)
+            with pd.ExcelWriter(backup_path, engine='openpyxl') as writer:
+                for sheet, df in df_dict.items():
+                    df.to_excel(writer, sheet_name=sheet, index=False)
+        except Exception as e:
+            print(f"Backup Error: {e}")
+
+def get_next_entry_number():
+    """توليد رقم قيد تسلسلي فريد"""
+    if not os.path.exists(EXCEL_FILE_PATH):
+        return "JE-1001"
+    try:
+        excel_file = pd.ExcelFile(EXCEL_FILE_PATH)
+        max_id = 1000
+        for sheet_name in excel_file.sheet_names:
+            df = pd.read_excel(EXCEL_FILE_PATH, sheet_name=sheet_name)
+            if "رقم القيد" in df.columns:
+                for val in df["رقم القيد"].dropna():
+                    match = re.search(r'\d+', str(val))
+                    if match:
+                        num = int(match.group())
+                        if num > max_id:
+                            max_id = num
+        return f"JE-{max_id + 1}"
+    except Exception:
+        return f"JE-{datetime.datetime.now().strftime('%H%M%S')}"
+
+# ==========================================
+# 3. التحليل المتقدم الموحد (Hybrid Triple AI Engine)
+# ==========================================
+async def parse_multimodal_input(text_prompt=None, image_bytes=None, audio_bytes=None):
+    prompt_instruction = """
+أنت المستشار المحاسبي الذكي لنظام إدارة متجر (FlowFi ERP).
+قم بتحليل المدخلات المرفقة (نص، صورة فاتورة/إيصال، أو تسجيل صوتي) بذكاء واستخرج البيانات التالية بالترتيب الدقيق باللغة العربية:
+
+قواعد اختيار التبويبات:
+- المبيعات: ["Sales"]
+- الموظفين والرواتب: ["Salaries", "Employee Database"]
+- الموردين والمشتريات والمصاريف: ["Suppliers", "Expenses"]
+
+صيغة الإجابة المطلوبة بالضبط:
+التبويبات: [اسم التبويبات]
+التفاصيل: [اسم أو وصف التفاصيل والأصناف والكميات بوضوح]
+المبلغ: [المبلغ الإجمالي مع العملة]
+طريقة الدفع: [كاش / كي نت / تحويل / آجل / غير محدد]
+حالة السداد: [مدفوع / مستحق / ذمم]
+"""
+
+    res_text = ""
     
-    data = parse_message_locally(user_text)
-    await save_to_sheet(data, update)
+    # 1. المحاولة الأولى عبر Gemini (ممتاز للصور والصوتيات)
+    if gemini_client:
+        try:
+            contents = [prompt_instruction]
+            if image_bytes:
+                contents.append({"mime_type": "image/jpeg", "data": image_bytes})
+            if audio_bytes:
+                contents.append({"mime_type": "audio/ogg", "data": audio_bytes})
+            if text_prompt:
+                contents.append(f"نص التاجر: {text_prompt}")
 
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text_message))
-    print("🚀 FlowFi WebApp Bot is up and running!")
-    app.run_polling()
+            response = gemini_client.models.generate_content(model='gemini-3.8-flash', contents=contents)
+            res_text = response.text.strip()
+        except Exception as e:
+            print(f"Gemini Engine Fallback: {e}")
+
+    # 2. المحاولة الثانية عبر OpenAI (للنصوص والتحليل الفوري)
+    if not res_text and openai_client and text_prompt and not image_bytes and not audio_bytes:
+        try:
+            completion = openai_client.chat.completions.
